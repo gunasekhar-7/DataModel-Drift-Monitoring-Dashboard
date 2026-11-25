@@ -1,0 +1,36 @@
+{
+  "name": "baseline_churn_model",
+  "version": "v1.0.0",
+  "training_date": "2026-11-25T07:51:52.979299+00:00Z",
+  "dataset_name": "Telco Customer Churn",
+  "dataset_version": "v1.0.0",
+  "metrics": {
+    "accuracy": 0.6535714285714286,
+    "precision": 0.3357664233576642,
+    "recall": 0.3942857142857143,
+    "f1": 0.36268068331143233,
+    "roc_auc": 0.6017442176870749
+  },
+  "feature_schema": {
+    "numeric_features": [
+      "senior_citizen",
+      "tenure",
+      "monthly_charges",
+      "total_charges"
+    ],
+    "categorical_features": [
+      "customer_id",
+      "gender",
+      "partner",
+      "dependents",
+      "contract",
+      "payment_method"
+    ],
+    "target_feature": "churn",
+    "total_features": 10
+  },
+  "artifact_path": "app/ml/model.pkl",
+  "preprocessor_path": "app/ml/preprocessor.pkl",
+  "feature_schema_path": "app/ml/features.json",
+  "status": "production"
+}

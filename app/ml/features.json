@@ -1,0 +1,18 @@
+{
+  "numeric_features": [
+    "senior_citizen",
+    "tenure",
+    "monthly_charges",
+    "total_charges"
+  ],
+  "categorical_features": [
+    "customer_id",
+    "gender",
+    "partner",
+    "dependents",
+    "contract",
+    "payment_method"
+  ],
+  "target_feature": "churn",
+  "total_features": 10
+}

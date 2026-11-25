@@ -1,0 +1,84 @@
+# Production Data Simulator Scenario Configurations
+# These configurations define the 10 drift scenarios for Phase 2+
+
+# 1. Sudden Numerical Shift
+# A sudden, significant shift in a numeric feature's distribution
+sudden_numerical_shift:
+  scenario_type: "sudden_numerical_shift"
+  column: "monthly_charges"
+  shift_amount: 25.0  # Sudden Rs. 25 increase in monthly charges
+  description: "Sudden increase in monthly charges by Rs. 25"
+
+# 2. Gradual Numerical Shift
+# A gradual shift in a numeric feature over multiple batches
+gradual_numerical_shift:
+  scenario_type: "gradual_numerical_shift"
+  column: "tenure"
+  total_shift: 30.0  # Total shift of 30 units over time
+  description: "Gradual increase in tenure by up to 30 units"
+
+# 3. Categorical Distribution Shift
+# A change in the distribution of a categorical feature
+categorical_distribution_shift:
+  scenario_type: "categorical_distribution_shift"
+  column: "contract"
+  new_categories: ["one_year", "two_year", "month_to_month", "two_year"]
+  description: "Change in contract distribution with new categories"
+
+# 4. Missing Value Spike
+# A spike in missing values for a specific feature
+missing_value_spike:
+  scenario_type: "missing_value_spike"
+  column: "total_charges"
+  spike_percentage: 0.4  # 40% of rows will have missing total_charges
+  description: "40% spike in missing total_charges values"
+
+# 5. Schema Change
+# A change in the feature schema (addition/removal of columns)
+schema_change:
+  scenario_type: "schema_change"
+  add_column: true
+  column: "new_feature"
+  default_value: null
+  description: "Addition of new feature column to the schema"
+
+# 6. Unexpected Categorical Values
+# Introduction of categorical values not seen in reference data
+unexpected_categorical_values:
+  scenario_type: "unexpected_categorical_values"
+  column: "payment_method"
+  new_values: ["bank_transfer", "credit_card", "electronic_check", "mailed_check"]
+  description: "Introduction of new payment method values not previously observed"
+
+# 7. Unit Conversion Error
+# A factor-of-10 or other unit conversion error in numeric data
+unit_conversion_error:
+  scenario_type: "unit_conversion_error"
+  column: "monthly_charges"
+  factor: 100.0  # Convert from hundreds to actual currency
+  description: "Unit conversion error: monthly_charges multiplied by 100"
+
+# 8. Prediction Distribution Shift
+# A change in the model's prediction distribution
+prediction_distribution_shift:
+  scenario_type: "prediction_distribution_shift"
+  column: "prediction"
+  shift_factor: 0.15
+  description: "Shift in prediction distribution by 0.15 factor"
+
+# 9. Seasonal Shift
+# Seasonal pattern applied to a numeric feature
+seasonal_shift:
+  scenario_type: "seasonal_shift"
+  column: "tenure"
+  amplitude: 0.1
+  period: 12
+  description: "Seasonal sinusoidal variation in tenure values"
+
+# 10. Concept Drift
+# A fundamental change in the relationship between features and target
+concept_drift:
+  scenario_type: "concept_drift"
+  target_column: "churn"
+  change_magnitude: 0.3  # 30% of target values will be flipped
+  description: "Concept drift: 30% of churn labels flipped"
