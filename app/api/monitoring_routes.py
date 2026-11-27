@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import Integer, desc
+from sqlalchemy import Integer
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -47,7 +47,7 @@ async def get_model_health(
     else:
         query = query.filter(ModelMetadata.status == "production")
 
-    model = query.order_by(desc(ModelMetadata.training_date)).first()
+    model = query.order_by(ModelMetadata.training_date.desc()).first()
 
     if not model:
         return {
@@ -63,16 +63,16 @@ async def get_model_health(
         }
 
     # Get latest batch
-    latest_batch = db.query(BatchMetadata).order_by(desc(BatchMetadata.timestamp)).first()
+    latest_batch = db.query(BatchMetadata).order_by(BatchMetadata.timestamp.desc()).first()
 
     # Get latest monitoring metrics
     latest_dq = db.query(DataQualityMetrics).filter(
         DataQualityMetrics.model_version == model.version
-    ).order_by(desc(DataQualityMetrics.timestamp)).first()
+    ).order_by(DataQualityMetrics.timestamp.desc()).first()
 
     latest_drift = db.query(DriftMetrics).filter(
         DriftMetrics.model_version == model.version
-    ).order_by(desc(DriftMetrics.timestamp)).first()
+    ).order_by(DriftMetrics.timestamp.desc()).first()
 
     # Count active alerts
     warnings = db.query(Alert).filter(
@@ -133,7 +133,7 @@ async def get_data_quality_history(
     if batch_id:
         query = query.filter(DataQualityMetrics.batch_id == batch_id)
 
-    metrics = query.order_by(desc(DataQualityMetrics.timestamp)).limit(limit).all()
+    metrics = query.order_by(DataQualityMetrics.timestamp.desc()).limit(limit).all()
 
     results = []
     for m in metrics:
@@ -184,7 +184,7 @@ async def get_drift_history(
     if severity:
         query = query.filter(DriftMetrics.severity == severity)
 
-    metrics = query.order_by(desc(DriftMetrics.timestamp)).limit(limit).all()
+    metrics = query.order_by(DriftMetrics.timestamp.desc()).limit(limit).all()
 
     results = []
     for m in metrics:
@@ -362,7 +362,7 @@ async def get_model_performance(
     if model_version:
         query = query.filter(ModelMetadata.version == model_version)
 
-    models = query.order_by(desc(ModelMetadata.training_date)).all()
+    models = query.order_by(ModelMetadata.training_date.desc()).all()
 
     results = []
     for m in models:
@@ -406,7 +406,7 @@ async def get_alerts(
     if alert_type:
         query = query.filter(Alert.alert_type == alert_type)
 
-    alerts = query.order_by(desc(Alert.timestamp)).limit(limit).all()
+    alerts = query.order_by(Alert.timestamp.desc()).limit(limit).all()
 
     results = []
     for a in alerts:
@@ -488,7 +488,7 @@ async def get_retraining_jobs(
     if status:
         query = query.filter(RetrainingJob.status == status)
 
-    jobs = query.order_by(desc(RetrainingJob.timestamp)).limit(limit).all()
+    jobs = query.order_by(RetrainingJob.timestamp.desc()).limit(limit).all()
 
     results = []
     for j in jobs:

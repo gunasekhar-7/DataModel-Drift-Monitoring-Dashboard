@@ -201,9 +201,12 @@ class PromotionGate:
             model = self.mlflow_manager.load_model("baseline_churn_model", "Staging")
 
             # Try loading preprocessor from artifacts
-            self.mlflow_manager.client.get_run(
-                self.mlflow_manager.client.get_model_version("baseline_churn_model", str(mv)).run_id
-            )
+            if self.mlflow_manager.client is None:
+                raise RuntimeError("MLflow client is not initialized")
+            mv_info = self.mlflow_manager.client.get_model_version("baseline_churn_model", str(mv))
+            if not mv_info.run_id:
+                raise RuntimeError("Candidate model version has no MLflow run_id")
+            self.mlflow_manager.client.get_run(mv_info.run_id)
 
             return ValidationCheck(
                 name="artifacts_loadable",
@@ -382,11 +385,11 @@ class PromotionGate:
         if self.mlflow_manager:
             try:
                 mv = self.mlflow_manager.get_model_version("baseline_churn_model", version)
-                if mv:
-                    run = self.mlflow_manager.client.get_run(
-                        self.mlflow_manager.client.get_model_version("baseline_churn_model", str(mv)).run_id
-                    )
-                    metrics = run.data.metrics
+                if mv and self.mlflow_manager.client is not None:
+                    mv_info = self.mlflow_manager.client.get_model_version("baseline_churn_model", str(mv))
+                    if mv_info.run_id:
+                        run = self.mlflow_manager.client.get_run(mv_info.run_id)
+                        metrics = run.data.metrics
             except Exception:
                 metrics = None
 
@@ -452,21 +455,21 @@ class PromotionGate:
 
             # Get candidate run ID
             candidate_mv = self.mlflow_manager.get_model_version("baseline_churn_model", candidate_version)
-            if candidate_mv:
+            if candidate_mv and self.mlflow_manager.client is not None:
                 candidate_run_id = self.mlflow_manager.client.get_model_version(
                     "baseline_churn_model", str(candidate_mv)
                 ).run_id
-
-                comparison = self.mlflow_manager.compare_models(
-                    candidate_run_id=candidate_run_id,
-                    champion_model_name="baseline_churn_model",
-                    champion_stage="Production",
-                    metric_thresholds={
-                        "accuracy": self.max_regression,
-                        "roc_auc": self.max_regression,
-                        "f1": self.max_regression,
-                    }
-                )
+                if candidate_run_id:
+                    comparison = self.mlflow_manager.compare_models(
+                        candidate_run_id=candidate_run_id,
+                        champion_model_name="baseline_churn_model",
+                        champion_stage="Production",
+                        metric_thresholds={
+                            "accuracy": self.max_regression,
+                            "roc_auc": self.max_regression,
+                            "f1": self.max_regression,
+                        }
+                    )
 
             if not comparison.passed:
                 return ValidationCheck(

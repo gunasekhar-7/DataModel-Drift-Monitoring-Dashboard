@@ -225,7 +225,7 @@ class AlertEngine:
 
         total_rows = dq.total_rows
         if total_rows == 0:
-            return alerts
+            return []
 
         # Check missing values per column (from details)
         if dq.details:

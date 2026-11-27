@@ -49,9 +49,10 @@ class MLflowManager:
             experiment_name: Name of the MLflow experiment
             registry_uri: MLflow model registry URI (for remote registry)
         """
-        self.tracking_uri = tracking_uri or os.getenv("MLFLOW_TRACKING_URI", "./mlruns")
+        self.tracking_uri: str = tracking_uri or os.getenv("MLFLOW_TRACKING_URI") or "./mlruns"
         self.experiment_name = experiment_name
         self.registry_uri = registry_uri or os.getenv("MLFLOW_REGISTRY_URI")
+        self.client: MlflowClient | None = None
 
         # Set tracking URI
         try:
@@ -175,6 +176,8 @@ class MLflowManager:
         model_uri = f"runs:/{run_id}/model"
 
         # Register model
+        if self.client is None:
+            raise RuntimeError("MLflow client is not initialized")
         mv = mlflow.register_model(model_uri, model_name)
 
         # Add version tag
@@ -206,6 +209,8 @@ class MLflowManager:
         Returns:
             MLflow version number or None if not found
         """
+        if self.client is None:
+            return None
         try:
             versions = self.client.search_model_versions(f"name='{model_name}'")
             for mv in versions:
@@ -225,6 +230,8 @@ class MLflowManager:
         Returns:
             Dictionary with model info or None
         """
+        if self.client is None:
+            return None
         try:
             versions = self.client.get_latest_versions(model_name, stages=[stage])
             if versions:
@@ -258,6 +265,18 @@ class MLflowManager:
         Returns:
             ModelComparisonResult with comparison details
         """
+        if self.client is None:
+            return ModelComparisonResult(
+                candidate_version="unknown",
+                champion_version="none",
+                candidate_metrics={},
+                champion_metrics={},
+                metric_differences={},
+                passed=False,
+                failed_metrics=["mlflow_unavailable"],
+                reason="MLflow client is not initialized",
+            )
+
         # Get candidate metrics
         candidate_run = self.client.get_run(candidate_run_id)
         candidate_metrics = candidate_run.data.metrics
@@ -340,6 +359,8 @@ class MLflowManager:
         Returns:
             True if successful
         """
+        if self.client is None:
+            return False
         try:
             self.client.transition_model_version_stage(
                 name=model_name,
@@ -375,6 +396,8 @@ class MLflowManager:
         Returns:
             List of artifact paths
         """
+        if self.client is None:
+            return []
         try:
             artifacts = self.client.list_artifacts(run_id)
             return [a.path for a in artifacts]

@@ -270,7 +270,7 @@ class RetrainingOrchestrator:
             champion_info = self.mlflow_manager.get_latest_model(
                 self.config.model_name, "Production"
             )
-            if champion_info:
+            if champion_info and self.mlflow_manager.client is not None:
                 champion_run = self.mlflow_manager.client.get_run(champion_info["run_id"])
                 job.champion_model_version = champion_info.get("version_string")
                 job.champion_metrics = champion_run.data.metrics
@@ -353,6 +353,8 @@ class RetrainingOrchestrator:
 
         # Parse output for MLflow run ID (in practice, would use MLflow API directly)
         # For now, find the latest run
+        if self.mlflow_manager.client is None:
+            raise RuntimeError("MLflow client is not initialized")
         runs = self.mlflow_manager.client.search_runs(
             experiment_ids=[self.mlflow_manager.experiment_id],
             filter_string=f"tags.model_version = '{model_version}'",
@@ -367,6 +369,8 @@ class RetrainingOrchestrator:
 
     def _get_candidate_metrics(self, run_id: str) -> dict[str, float]:
         """Get metrics from candidate model run."""
+        if self.mlflow_manager.client is None:
+            raise RuntimeError("MLflow client is not initialized")
         run = self.mlflow_manager.client.get_run(run_id)
         return run.data.metrics
 
@@ -386,7 +390,7 @@ class RetrainingOrchestrator:
             failed_checks.append(f"roc_auc {roc_auc:.4f} < {self.config.min_roc_auc}")
 
         # Compare with champion if available
-        if job.champion_metrics:
+        if job.champion_metrics and job.mlflow_run_id:
             comparison = self.mlflow_manager.compare_models(
                 candidate_run_id=job.mlflow_run_id,
                 champion_model_name=self.config.model_name,
