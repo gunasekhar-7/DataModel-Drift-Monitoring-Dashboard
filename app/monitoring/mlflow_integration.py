@@ -35,7 +35,7 @@ class ModelComparisonResult:
 
 class MLflowManager:
     """Manages MLflow integration for experiment tracking and model registry."""
-    
+
     def __init__(
         self,
         tracking_uri: str | None = None,
@@ -43,7 +43,7 @@ class MLflowManager:
         registry_uri: str | None = None,
     ):
         """Initialize MLflow manager.
-        
+
         Args:
             tracking_uri: MLflow tracking server URI (defaults to local ./mlruns)
             experiment_name: Name of the MLflow experiment
@@ -52,7 +52,7 @@ class MLflowManager:
         self.tracking_uri = tracking_uri or os.getenv("MLFLOW_TRACKING_URI", "./mlruns")
         self.experiment_name = experiment_name
         self.registry_uri = registry_uri or os.getenv("MLFLOW_REGISTRY_URI")
-        
+
         # Set tracking URI
         try:
             mlflow.set_tracking_uri(self.tracking_uri)
@@ -73,15 +73,15 @@ class MLflowManager:
                 self.client = MlflowClient(tracking_uri=self.tracking_uri, registry_uri=self.registry_uri)
             except Exception:
                 self.client = None
-    
+
     @contextmanager
     def start_run(self, run_name: str | None = None, tags: dict[str, str] | None = None):
         """Context manager for MLflow run.
-        
+
         Args:
             run_name: Optional name for the run
             tags: Optional tags for the run
-            
+
         Yields:
             Active MLflow run
         """
@@ -93,7 +93,7 @@ class MLflowManager:
             yield run
         finally:
             mlflow.end_run()
-    
+
     def log_training_run(
         self,
         model: Any,
@@ -106,7 +106,7 @@ class MLflowManager:
         run_name: str | None = None,
     ) -> str:
         """Log a complete training run to MLflow.
-        
+
         Args:
             model: Trained model object
             model_name: Name of the model
@@ -116,7 +116,7 @@ class MLflowManager:
             artifacts: Dictionary of artifact names to file paths
             tags: Optional tags
             run_name: Optional run name
-            
+
         Returns:
             MLflow run ID
         """
@@ -129,31 +129,31 @@ class MLflowManager:
         }
         if tags:
             default_tags.update(tags)
-        
+
         with self.start_run(run_name=run_name, tags=default_tags) as run:
             # Log parameters
             for key, value in params.items():
                 mlflow.log_param(key, value)
-            
+
             # Log metrics
             for key, value in metrics.items():
                 mlflow.log_metric(key, value)
-            
+
             # Log model
             if "xgb" in type(model).__name__.lower():
                 mlflow.xgboost.log_model(model, "model")
             else:
                 mlflow.sklearn.log_model(model, "model")
-            
+
             # Log additional artifacts
             for artifact_name, artifact_path in artifacts.items():
                 if os.path.exists(artifact_path):
                     mlflow.log_artifact(artifact_path, artifact_name)
-            
+
             run_id = run.info.run_id
             logger.info(f"Logged training run: {run_id} for {model_name} v{version}")
             return run_id
-    
+
     def register_model(
         self,
         run_id: str,
@@ -162,21 +162,21 @@ class MLflowManager:
         stage: str = "Staging",
     ) -> str:
         """Register a model in MLflow Model Registry.
-        
+
         Args:
             run_id: MLflow run ID containing the model
             model_name: Name for the registered model
             version: Version string (used as alias/tag)
             stage: Initial stage (Staging, Production, Archived)
-            
+
         Returns:
             Registered model version
         """
         model_uri = f"runs:/{run_id}/model"
-        
+
         # Register model
         mv = mlflow.register_model(model_uri, model_name)
-        
+
         # Add version tag
         self.client.set_model_version_tag(
             name=model_name,
@@ -184,7 +184,7 @@ class MLflowManager:
             key="version_string",
             value=version,
         )
-        
+
         # Transition to stage
         self.client.transition_model_version_stage(
             name=model_name,
@@ -192,17 +192,17 @@ class MLflowManager:
             stage=stage,
             archive_existing_versions=False,
         )
-        
+
         logger.info(f"Registered model {model_name} version {mv.version} in stage {stage}")
         return mv.version
-    
+
     def get_model_version(self, model_name: str, version: str) -> int | None:
         """Get MLflow model version number for a version string.
-        
+
         Args:
             model_name: Registered model name
             version: Version string (e.g., "v1.0.0")
-            
+
         Returns:
             MLflow version number or None if not found
         """
@@ -214,14 +214,14 @@ class MLflowManager:
         except Exception as e:
             logger.warning(f"Error searching model versions: {e}")
         return None
-    
+
     def get_latest_model(self, model_name: str, stage: str = "Production") -> dict | None:
         """Get latest model version in a stage.
-        
+
         Args:
             model_name: Registered model name
             stage: Stage to search (Production, Staging, etc.)
-            
+
         Returns:
             Dictionary with model info or None
         """
@@ -239,7 +239,7 @@ class MLflowManager:
         except Exception as e:
             logger.warning(f"Error getting latest model: {e}")
         return None
-    
+
     def compare_models(
         self,
         candidate_run_id: str,
@@ -248,20 +248,20 @@ class MLflowManager:
         metric_thresholds: dict[str, float] | None = None,
     ) -> ModelComparisonResult:
         """Compare candidate model against champion.
-        
+
         Args:
             candidate_run_id: MLflow run ID of candidate model
             champion_model_name: Name of registered champion model
             champion_stage: Stage of champion model to compare against
             metric_thresholds: Minimum required metric values (metric -> min_value)
-            
+
         Returns:
             ModelComparisonResult with comparison details
         """
         # Get candidate metrics
         candidate_run = self.client.get_run(candidate_run_id)
         candidate_metrics = candidate_run.data.metrics
-        
+
         # Get champion model
         champion_info = self.get_latest_model(champion_model_name, champion_stage)
         if not champion_info:
@@ -275,25 +275,25 @@ class MLflowManager:
                 failed_metrics=["champion_not_found"],
                 reason=f"No champion model found in {champion_stage} stage",
             )
-        
+
         # Get champion metrics
         champion_run = self.client.get_run(champion_info["run_id"])
         champion_metrics = champion_run.data.metrics
-        
+
         # Get version strings
         candidate_version = candidate_run.data.tags.get("model_version", "unknown")
         champion_version = champion_info.get("version_string", "unknown")
-        
+
         # Compare metrics
         metric_differences = {}
         failed_metrics = []
-        
+
         for metric_name, candidate_value in candidate_metrics.items():
             if metric_name in champion_metrics:
                 champion_value = champion_metrics[metric_name]
                 diff = candidate_value - champion_value
                 metric_differences[metric_name] = diff
-                
+
                 # Check if candidate is worse (for metrics where higher is better)
                 higher_is_better = metric_name in ["accuracy", "precision", "recall", "f1", "roc_auc"]
                 if higher_is_better and diff < 0:
@@ -306,11 +306,11 @@ class MLflowManager:
                     threshold = metric_thresholds.get(metric_name, 0.0) if metric_thresholds else 0.0
                     if diff > threshold:
                         failed_metrics.append(metric_name)
-        
+
         passed = len(failed_metrics) == 0
-        
+
         reason = "All metrics meet or exceed champion" if passed else f"Failed metrics: {', '.join(failed_metrics)}"
-        
+
         return ModelComparisonResult(
             candidate_version=candidate_version,
             champion_version=champion_version,
@@ -321,7 +321,7 @@ class MLflowManager:
             failed_metrics=failed_metrics,
             reason=reason,
         )
-    
+
     def promote_model(
         self,
         model_name: str,
@@ -330,13 +330,13 @@ class MLflowManager:
         archive_existing: bool = True,
     ) -> bool:
         """Promote a model version to a stage.
-        
+
         Args:
             model_name: Registered model name
             version: Model version number
             stage: Target stage (Production, Staging, Archived)
             archive_existing: Whether to archive existing versions in target stage
-            
+
         Returns:
             True if successful
         """
@@ -352,26 +352,26 @@ class MLflowManager:
         except Exception as e:
             logger.error(f"Failed to promote model: {e}")
             return False
-    
+
     def load_model(self, model_name: str, stage: str = "Production") -> Any:
         """Load a model from MLflow registry.
-        
+
         Args:
             model_name: Registered model name
             stage: Stage to load from
-            
+
         Returns:
             Loaded model object
         """
         model_uri = f"models:/{model_name}/{stage}"
         return mlflow.pyfunc.load_model(model_uri)
-    
+
     def get_run_artifacts(self, run_id: str) -> list[str]:
         """List artifacts for a run.
-        
+
         Args:
             run_id: MLflow run ID
-            
+
         Returns:
             List of artifact paths
         """

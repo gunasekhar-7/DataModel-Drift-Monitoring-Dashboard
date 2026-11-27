@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from prometheus_client import Counter, Histogram, Gauge
+from prometheus_client import Counter, Gauge, Histogram
 
 # Request tracking
 REQUEST_COUNT = Counter(

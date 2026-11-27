@@ -52,7 +52,7 @@ class AlertRule:
 class AlertContext:
     """Context information for alert evaluation."""
     batch_id: str
-    model_version: str
+    model_version: str | None
     timestamp: datetime
     data_quality_metrics: DataQualityMetrics | None = None
     drift_metrics: list[DriftMetrics] = field(default_factory=list)
@@ -61,7 +61,7 @@ class AlertContext:
 
 class AlertEngine:
     """Engine for evaluating monitoring data and generating alerts."""
-    
+
     DEFAULT_RULES = [
         # Data Quality Rules
         AlertRule(
@@ -120,7 +120,7 @@ class AlertEngine:
             threshold=0,
             feature_specific=True,
         ),
-        
+
         # Drift Rules
         AlertRule(
             name="drift_detected_ks",
@@ -154,7 +154,7 @@ class AlertEngine:
             threshold=1.0,  # Will be auto-scaled
             feature_specific=True,
         ),
-        
+
         # Aggregate drift rules
         AlertRule(
             name="multiple_features_drifting",
@@ -165,7 +165,7 @@ class AlertEngine:
             feature_specific=False,
         ),
     ]
-    
+
     def __init__(
         self,
         db: Session,
@@ -173,7 +173,7 @@ class AlertEngine:
         notification_service: Any | None = None,
     ):
         """Initialize the alert engine.
-        
+
         Args:
             db: Database session
             rules: Custom alert rules (uses defaults if None)
@@ -182,30 +182,28 @@ class AlertEngine:
         self.db = db
         self.rules = rules or self.DEFAULT_RULES
         self.notification_service = notification_service
-    
+
     def evaluate(self, context: AlertContext) -> list[Alert]:
         """Evaluate monitoring context and generate alerts.
-        
+
         Args:
             context: Monitoring context with batch data and metrics
-            
+
         Returns:
             List of generated alerts
         """
-        alerts = []
-        
+        raw_alerts: list[Alert | None] = []
+
         # Evaluate data quality rules
         if context.data_quality_metrics:
-            dq_alerts = self._evaluate_data_quality(context)
-            alerts.extend(dq_alerts)
-        
+            raw_alerts.extend(self._evaluate_data_quality(context))
+
         # Evaluate drift rules
         if context.drift_metrics:
-            drift_alerts = self._evaluate_drift(context)
-            alerts.extend(drift_alerts)
-        
+            raw_alerts.extend(self._evaluate_drift(context))
+
         # Filter out None (suppressed duplicate) alerts
-        alerts = [a for a in alerts if a is not None]
+        alerts: list[Alert] = [a for a in raw_alerts if a is not None]
 
         # Persist alerts
         for alert in alerts:
@@ -216,26 +214,26 @@ class AlertEngine:
             self.notification_service.send_alerts(alerts)
 
         return alerts
-    
+
     def _evaluate_data_quality(self, context: AlertContext) -> list[Alert]:
         """Evaluate data quality metrics against rules."""
-        alerts = []
+        alerts: list[Alert | None] = []
         dq = context.data_quality_metrics
-        
+
         if not dq:
-            return alerts
-        
+            return []
+
         total_rows = dq.total_rows
         if total_rows == 0:
             return alerts
-        
+
         # Check missing values per column (from details)
         if dq.details:
             for result in dq.details.get("results", []):
                 if result.get("validation_type") == "missing_values":
                     col = result.get("column")
                     pct = result.get("affected_percentage", 0) / 100
-                    
+
                     # Check warning threshold
                     if pct >= 0.10:
                         severity = AlertSeverity.CRITICAL if pct >= 0.25 else AlertSeverity.WARNING
@@ -252,7 +250,7 @@ class AlertEngine:
                             explanation=f"Missing value percentage ({pct:.1%}) exceeds threshold",
                             recommended_action="Investigate data pipeline for source of missing values. Consider imputation strategy.",
                         ))
-                
+
                 elif result.get("validation_type") == "duplicates":
                     pct = result.get("affected_percentage", 0) / 100
                     if pct >= 0.05:
@@ -269,7 +267,7 @@ class AlertEngine:
                             explanation="Duplicate rows may indicate data pipeline issues or double-counting",
                             recommended_action="Review data ingestion pipeline for deduplication logic",
                         ))
-                
+
                 elif result.get("validation_type") == "infinite_values":
                     col = result.get("column")
                     count = result.get("affected_rows", 0)
@@ -287,7 +285,7 @@ class AlertEngine:
                             explanation="Infinite values will break model inference and downstream processing",
                             recommended_action="Fix data source or add validation to replace infinite values",
                         ))
-                
+
                 elif result.get("validation_type") == "out_of_range":
                     col = result.get("column")
                     pct = result.get("affected_percentage", 0) / 100
@@ -305,7 +303,7 @@ class AlertEngine:
                             explanation="Values fall outside expected range from reference data",
                             recommended_action="Investigate data source for sensor errors or schema changes",
                         ))
-                
+
                 elif result.get("validation_type") == "unexpected_categorical":
                     col = result.get("column")
                     pct = result.get("affected_percentage", 0) / 100
@@ -324,7 +322,7 @@ class AlertEngine:
                             explanation=f"New categorical values not seen in training data ({pct:.1%} of rows)",
                             recommended_action="Update categorical encoder or investigate data source changes",
                         ))
-                
+
                 elif result.get("validation_type") == "all_null_columns":
                     col = result.get("column")
                     alerts.append(self._create_alert(
@@ -340,26 +338,26 @@ class AlertEngine:
                         explanation="Column contains no usable data for model inference",
                         recommended_action="Remove column from pipeline or investigate data source",
                     ))
-        
-        return alerts
-    
+
+        return [a for a in alerts if a is not None]
+
     def _evaluate_drift(self, context: AlertContext) -> list[Alert]:
         """Evaluate drift metrics against rules."""
-        alerts = []
+        alerts: list[Alert | None] = []
         drift_metrics = context.drift_metrics
-        
+
         if not drift_metrics:
-            return alerts
-        
+            return []
+
         # Group by feature
         by_feature: dict[str, list[DriftMetrics]] = {}
         for dm in drift_metrics:
             if dm.feature_name not in by_feature:
                 by_feature[dm.feature_name] = []
             by_feature[dm.feature_name].append(dm)
-        
+
         drift_detected_features = set()
-        
+
         for feature_name, metrics in by_feature.items():
             for dm in metrics:
                 # KS test
@@ -380,7 +378,7 @@ class AlertEngine:
                             recommended_action="Investigate feature drift cause. Consider retraining if persistent.",
                         ))
                         drift_detected_features.add(feature_name)
-                
+
                 # PSI
                 elif dm.test_name == "population_stability_index":
                     if dm.statistic >= 0.25:
@@ -413,7 +411,7 @@ class AlertEngine:
                             recommended_action="Monitor closely. Investigate if trend continues.",
                         ))
                         drift_detected_features.add(feature_name)
-                
+
                 # Wasserstein
                 elif dm.test_name == "wasserstein_distance":
                     if dm.statistic > dm.threshold:
@@ -431,7 +429,7 @@ class AlertEngine:
                             recommended_action="Review feature distribution changes. Consider retraining.",
                         ))
                         drift_detected_features.add(feature_name)
-        
+
         # Aggregate rule: multiple features drifting
         if len(drift_detected_features) >= 3:
             alerts.append(self._create_alert(
@@ -447,9 +445,9 @@ class AlertEngine:
                 explanation="Coordinated drift across multiple features suggests systematic data change",
                 recommended_action="Urgent investigation. Schedule model retraining with updated data.",
             ))
-        
-        return alerts
-    
+
+        return [a for a in alerts if a is not None]
+
     def _create_alert(
         self,
         context: AlertContext,
@@ -463,10 +461,10 @@ class AlertEngine:
         message: str,
         explanation: str,
         recommended_action: str,
-    ) -> Alert:
+    ) -> Alert | None:
         """Create an alert object."""
         alert_id = f"alt-{uuid.uuid4().hex[:10]}"
-        
+
         # Check for duplicate alerts (cooldown)
         existing = self.db.query(Alert).filter(
             Alert.batch_id == context.batch_id,
@@ -474,7 +472,7 @@ class AlertEngine:
             Alert.detection_method == detection_method,
             Alert.status.in_([AlertStatus.ACTIVE.value, AlertStatus.ACKNOWLEDGED.value]),
         ).first()
-        
+
         if existing:
             # Check cooldown
             rule = next(
@@ -489,7 +487,7 @@ class AlertEngine:
             cooldown_delta = now_ts - existing_ts
             if cooldown_delta.total_seconds() < cooldown_minutes * 60:
                 return None  # Suppress duplicate
-        
+
         # Ensure alert timestamp is timezone-aware
         alert_ts = context.timestamp
         if alert_ts.tzinfo is None:
@@ -511,9 +509,9 @@ class AlertEngine:
             recommended_action=recommended_action,
             status=AlertStatus.ACTIVE.value,
         )
-        
+
         return alert
-    
+
     def _persist_alert(self, alert: Alert | None) -> None:
         """Persist alert to database."""
         if alert is None:

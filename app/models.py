@@ -1,11 +1,11 @@
 """SQLAlchemy ORM models for the Data & Model Drift Monitoring Platform."""
 
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy import (
     JSON,
     Boolean,
-    Column,
     DateTime,
     Float,
     Index,
@@ -13,6 +13,7 @@ from sqlalchemy import (
     String,
     Text,
 )
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 
@@ -25,19 +26,19 @@ class ModelMetadata(Base):
     # For SQLite: no schema prefix
     # For PostgreSQL: schema can be set via DATABASE_URL or metadata
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False, index=True)
-    version = Column(String(50), nullable=False, unique=True, index=True)
-    training_date = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    version: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
+    training_date: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
-    dataset_name = Column(String(255), nullable=False)
-    dataset_version = Column(String(100), nullable=True)
-    metrics = Column(JSON, nullable=True)  # accuracy, precision, recall, f1, roc_auc
-    preprocessing_config = Column(JSON, nullable=True)
-    feature_schema = Column(JSON, nullable=True)
-    artifact_path = Column(String(500), nullable=False)
-    status = Column(String(50), nullable=False, default="staging", index=True)
+    dataset_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    dataset_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    metrics: Mapped[Any] = mapped_column(JSON, nullable=True)  # accuracy, precision, recall, f1, roc_auc
+    preprocessing_config: Mapped[Any] = mapped_column(JSON, nullable=True)
+    feature_schema: Mapped[Any] = mapped_column(JSON, nullable=True)
+    artifact_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="staging", index=True)
 
 
 class PredictionRequests(Base):
@@ -46,14 +47,14 @@ class PredictionRequests(Base):
     __tablename__ = "prediction_requests"
     # No __table_args__ - schema is determined by DATABASE_URL
 
-    id = Column(Integer, primary_key=True, index=True)
-    request_id = Column(String(100), unique=True, nullable=False, index=True)
-    timestamp = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    request_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
-    model_version = Column(String(50), nullable=False, index=True)
-    features = Column(JSON, nullable=False)
-    status = Column(String(50), nullable=False, default="completed", index=True)
+    model_version: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    features: Mapped[Any] = mapped_column(JSON, nullable=False)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="completed", index=True)
 
 
 class PredictionResults(Base):
@@ -62,14 +63,14 @@ class PredictionResults(Base):
     __tablename__ = "prediction_results"
     # No __table_args__ - schema is determined by DATABASE_URL
 
-    id = Column(Integer, primary_key=True, index=True)
-    request_id = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    request_id: Mapped[str] = mapped_column(
         String(100), nullable=False, index=True
     )  # FK via prediction_requests.request_id
-    predicted_class = Column(Integer, nullable=False)
-    probability = Column(Float, nullable=True)  # probability of positive class
-    prediction_probabilities = Column(JSON, nullable=True)  # full probability vector
-    processing_time_ms = Column(Integer, nullable=True)
+    predicted_class: Mapped[int] = mapped_column(Integer, nullable=False)
+    probability: Mapped[float | None] = mapped_column(Float, nullable=True)  # probability of positive class
+    prediction_probabilities: Mapped[Any] = mapped_column(JSON, nullable=True)  # full probability vector
+    processing_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class BatchMetadata(Base):
@@ -78,16 +79,16 @@ class BatchMetadata(Base):
     __tablename__ = "batch_metadata"
     # No __table_args__ - schema is determined by DATABASE_URL
 
-    id = Column(Integer, primary_key=True, index=True)
-    batch_id = Column(String(100), unique=True, nullable=False, index=True)
-    timestamp = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    batch_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
-    reference_batch_id = Column(String(100), nullable=True)
-    row_count = Column(Integer, nullable=False, default=0)
-    scenario = Column(String(100), nullable=True)
-    drift_severity = Column(String(50), nullable=True)
-    status = Column(String(50), nullable=False, default="generated", index=True)
+    reference_batch_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    scenario: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    drift_severity: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="generated", index=True)
 
 
 class PredictionHistory(Base):
@@ -96,19 +97,19 @@ class PredictionHistory(Base):
     __tablename__ = "prediction_history"
     # No __table_args__ - schema is determined by DATABASE_URL
 
-    id = Column(Integer, primary_key=True, index=True)
-    batch_id = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    batch_id: Mapped[str | None] = mapped_column(
         String(100), nullable=True, index=True
     )  # FK via batch_metadata.batch_id
-    request_id = Column(
+    request_id: Mapped[str | None] = mapped_column(
         String(100), nullable=True, index=True
     )  # FK via prediction_requests.request_id
-    timestamp = Column(
+    timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
-    model_version = Column(String(50), nullable=False, index=True)
-    predicted_class = Column(Integer, nullable=False)
-    probability = Column(Float, nullable=True)
+    model_version: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    predicted_class: Mapped[int] = mapped_column(Integer, nullable=False)
+    probability: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 class DataQualityMetrics(Base):
@@ -116,23 +117,23 @@ class DataQualityMetrics(Base):
 
     __tablename__ = "data_quality_metrics"
 
-    id = Column(Integer, primary_key=True, index=True)
-    batch_id = Column(String(100), nullable=False, index=True)
-    timestamp = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    batch_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
-    model_version = Column(String(50), nullable=True, index=True)
-    total_rows = Column(Integer, nullable=False)
-    total_columns = Column(Integer, nullable=False)
-    passed = Column(Boolean, nullable=False, default=True)
-    missing_values_count = Column(Integer, nullable=False, default=0)
-    duplicate_rows_count = Column(Integer, nullable=False, default=0)
-    infinite_values_count = Column(Integer, nullable=False, default=0)
-    out_of_range_count = Column(Integer, nullable=False, default=0)
-    unexpected_categorical_count = Column(Integer, nullable=False, default=0)
-    all_null_columns_count = Column(Integer, nullable=False, default=0)
-    invalid_records_count = Column(Integer, nullable=False, default=0)
-    details = Column(JSON, nullable=True)  # Full validation results
+    model_version: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    total_rows: Mapped[int] = mapped_column(Integer, nullable=False)
+    total_columns: Mapped[int] = mapped_column(Integer, nullable=False)
+    passed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    missing_values_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    duplicate_rows_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    infinite_values_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    out_of_range_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    unexpected_categorical_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    all_null_columns_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    invalid_records_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    details: Mapped[Any] = mapped_column(JSON, nullable=True)  # Full validation results
 
     __table_args__ = (Index("ix_dq_batch_timestamp", "batch_id", "timestamp"),)
 
@@ -142,21 +143,21 @@ class DriftMetrics(Base):
 
     __tablename__ = "drift_metrics"
 
-    id = Column(Integer, primary_key=True, index=True)
-    batch_id = Column(String(100), nullable=False, index=True)
-    reference_batch_id = Column(String(100), nullable=True, index=True)
-    timestamp = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    batch_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    reference_batch_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
-    model_version = Column(String(50), nullable=True, index=True)
-    feature_name = Column(String(100), nullable=False, index=True)
-    test_name = Column(String(50), nullable=False)  # ks_test, psi, wasserstein
-    statistic = Column(Float, nullable=False)
-    p_value = Column(Float, nullable=True)
-    threshold = Column(Float, nullable=False)
-    severity = Column(String(20), nullable=False)  # no_drift, warning, drift_detected
-    overall_drift = Column(Boolean, nullable=False, default=False)
-    details = Column(JSON, nullable=True)
+    model_version: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    feature_name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    test_name: Mapped[str] = mapped_column(String(50), nullable=False)  # ks_test, psi, wasserstein
+    statistic: Mapped[float] = mapped_column(Float, nullable=False)
+    p_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    threshold: Mapped[float] = mapped_column(Float, nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)  # no_drift, warning, drift_detected
+    overall_drift: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    details: Mapped[Any] = mapped_column(JSON, nullable=True)
 
     __table_args__ = (Index("ix_drift_batch_feature", "batch_id", "feature_name"),)
 
@@ -166,27 +167,27 @@ class Alert(Base):
 
     __tablename__ = "alerts"
 
-    id = Column(Integer, primary_key=True, index=True)
-    alert_id = Column(String(50), unique=True, nullable=False, index=True)
-    batch_id = Column(String(100), nullable=True, index=True)
-    model_version = Column(String(50), nullable=True, index=True)
-    timestamp = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    alert_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    batch_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    model_version: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
-    alert_type = Column(String(50), nullable=False, index=True)  # data_quality, drift, performance
-    severity = Column(String(20), nullable=False, index=True)  # warning, critical
-    feature_name = Column(String(100), nullable=True, index=True)
-    detection_method = Column(String(50), nullable=True)
-    measured_value = Column(Float, nullable=True)
-    threshold_value = Column(Float, nullable=True)
-    message = Column(Text, nullable=False)
-    explanation = Column(Text, nullable=True)
-    recommended_action = Column(Text, nullable=True)
-    status = Column(String(20), nullable=False, default="active", index=True)  # active, acknowledged, resolved
-    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
-    acknowledged_by = Column(String(100), nullable=True)
-    resolved_at = Column(DateTime(timezone=True), nullable=True)
-    resolved_by = Column(String(100), nullable=True)
+    alert_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)  # data_quality, drift, performance
+    severity: Mapped[str] = mapped_column(String(20), nullable=False, index=True)  # warning, critical
+    feature_name: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    detection_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    measured_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    threshold_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recommended_action: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active", index=True)  # active, acknowledged, resolved
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    acknowledged_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     __table_args__ = (Index("ix_alert_batch_severity", "batch_id", "severity"),)
 
@@ -196,22 +197,22 @@ class RetrainingJob(Base):
 
     __tablename__ = "retraining_jobs"
 
-    id = Column(Integer, primary_key=True, index=True)
-    job_id = Column(String(50), unique=True, nullable=False, index=True)
-    trigger_batch_id = Column(String(100), nullable=True, index=True)
-    trigger_reason = Column(String(100), nullable=True)
-    timestamp = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    job_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    trigger_batch_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    trigger_reason: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
-    status = Column(String(20), nullable=False, default="pending", index=True)  # pending, running, completed, failed
-    mlflow_run_id = Column(String(100), nullable=True)
-    candidate_model_version = Column(String(50), nullable=True)
-    candidate_metrics = Column(JSON, nullable=True)
-    champion_model_version = Column(String(50), nullable=True)
-    champion_metrics = Column(JSON, nullable=True)
-    promotion_decision = Column(String(20), nullable=True)  # promoted, rejected
-    promotion_reason = Column(Text, nullable=True)
-    completed_at = Column(DateTime(timezone=True), nullable=True)
-    error_message = Column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)  # pending, running, completed, failed
+    mlflow_run_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    candidate_model_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    candidate_metrics: Mapped[Any] = mapped_column(JSON, nullable=True)
+    champion_model_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    champion_metrics: Mapped[Any] = mapped_column(JSON, nullable=True)
+    promotion_decision: Mapped[str | None] = mapped_column(String(20), nullable=True)  # promoted, rejected
+    promotion_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (Index("ix_retraining_status", "status"),)

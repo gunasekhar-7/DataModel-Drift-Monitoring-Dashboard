@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
@@ -36,14 +37,14 @@ class MonitoringResult:
     timestamp: datetime
     data_quality_report: Any | None = None
     drift_report: Any | None = None
-    alerts_generated: list[str] = None
+    alerts_generated: list[str] = field(default_factory=list)
     success: bool = True
     error: str | None = None
 
 
 class MonitoringPipeline:
     """Main monitoring pipeline orchestrator."""
-    
+
     def __init__(
         self,
         db: Session,
@@ -53,7 +54,7 @@ class MonitoringPipeline:
         alert_engine: AlertEngine | None = None,
     ):
         """Initialize the monitoring pipeline.
-        
+
         Args:
             db: Database session
             reference_data: Reference dataset for drift detection (loads from default if None)
@@ -63,13 +64,13 @@ class MonitoringPipeline:
         """
         self.db = db
         self.reference_batch_id = reference_batch_id
-        
+
         # Load reference data if not provided
         if reference_data is not None:
             self.reference_data = reference_data
         else:
             self.reference_data = self._load_reference_data()
-        
+
         # Initialize engines
         self.dq_engine = create_engine_from_reference(self.reference_data)
         self.drift_detector = NumericalDriftDetector()
@@ -77,25 +78,25 @@ class MonitoringPipeline:
         self.alert_engine = alert_engine or create_alert_engine(
             db=db, notification_service=self.notification_service
         )
-        
+
         # Numeric features for drift detection
         self.numeric_features = [
             col for col in self.reference_data.columns
             if pd.api.types.is_numeric_dtype(self.reference_data[col])
         ]
-    
+
     def _load_reference_data(self) -> pd.DataFrame:
         """Load reference dataset."""
         try:
             path = settings.simulator_reference_data_path
-            if not path or not pd.io.common.file_exists(path):
+            if not path or not os.path.exists(path):
                 path = "data/raw/Telco-Customer-Churn.csv"
             return pd.read_csv(path)
         except Exception as e:
             logger.error(f"Failed to load reference data: {e}")
             # Return empty dataframe as fallback
             return pd.DataFrame()
-    
+
     def process_batch(
         self,
         batch_df: pd.DataFrame,
@@ -104,39 +105,39 @@ class MonitoringPipeline:
         scenario: str | None = None,
     ) -> MonitoringResult:
         """Process a production batch through the full monitoring pipeline.
-        
+
         Args:
             batch_df: Production batch DataFrame
             batch_id: Batch identifier (generated if None)
             model_version: Model version used for predictions
             scenario: Scenario name if this is a simulated batch
-            
+
         Returns:
             MonitoringResult with all monitoring outputs
         """
         if batch_id is None:
             batch_id = f"batch-{uuid.uuid4().hex[:8]}"
-        
+
         timestamp = datetime.now(timezone.utc)
-        
+
         logger.info(f"Processing batch {batch_id} with {len(batch_df)} rows")
-        
+
         result = MonitoringResult(
             batch_id=batch_id,
             timestamp=timestamp,
             alerts_generated=[],
         )
-        
+
         try:
             # 1. Store batch metadata
             self._store_batch_metadata(batch_id, batch_df, timestamp, scenario)
-            
+
             # 2. Run data quality checks
             logger.info(f"Batch {batch_id}: Running data quality checks...")
             dq_report = self.dq_engine.validate(batch_df, batch_id)
             result.data_quality_report = dq_report
             self._store_data_quality_metrics(dq_report, model_version)
-            
+
             # 3. Run drift detection
             logger.info(f"Batch {batch_id}: Running drift detection...")
             drift_report = self.drift_detector.detect_batch(
@@ -148,25 +149,25 @@ class MonitoringPipeline:
             )
             result.drift_report = drift_report
             self._store_drift_metrics(drift_report, model_version)
-            
+
             # 4. Get model version if not provided
             if not model_version:
                 model_version = self._get_latest_model_version()
-            
+
             # 5. Generate alerts
             logger.info(f"Batch {batch_id}: Evaluating alerts...")
             alerts = self._evaluate_alerts(batch_id, model_version, timestamp, dq_report, drift_report)
             result.alerts_generated = [a.alert_id for a in alerts]
-            
+
             logger.info(f"Batch {batch_id}: Monitoring complete. {len(alerts)} alerts generated.")
-            
+
         except Exception as e:
             logger.error(f"Batch {batch_id}: Monitoring failed: {e}")
             result.success = False
             result.error = str(e)
-        
+
         return result
-    
+
     def _store_batch_metadata(
         self,
         batch_id: str,
@@ -186,7 +187,7 @@ class MonitoringPipeline:
         )
         self.db.add(batch_meta)
         self.db.commit()
-    
+
     def _store_data_quality_metrics(
         self,
         dq_report: Any,
@@ -222,7 +223,7 @@ class MonitoringPipeline:
             r.affected_rows for r in dq_report.results
             if r.validation_type.value == "invalid_records"
         )
-        
+
         dq_metrics = DataQualityMetrics(
             batch_id=dq_report.batch_id,
             timestamp=datetime.fromisoformat(dq_report.timestamp.replace("Z", "+00:00")),
@@ -241,7 +242,7 @@ class MonitoringPipeline:
         )
         self.db.add(dq_metrics)
         self.db.commit()
-    
+
     def _store_drift_metrics(
         self,
         drift_report: Any,
@@ -264,12 +265,12 @@ class MonitoringPipeline:
                 details=dm.details,
             )
             self.db.add(drift_metric)
-        
+
         # Update batch metadata with drift severity
         batch_meta = self.db.query(BatchMetadata).filter(
             BatchMetadata.batch_id == drift_report.batch_id
         ).first()
-        
+
         if batch_meta:
             if drift_report.overall_drift:
                 # Determine severity from results
@@ -277,21 +278,21 @@ class MonitoringPipeline:
                 batch_meta.drift_severity = "critical" if critical else "warning"
             else:
                 batch_meta.drift_severity = "none"
-        
+
         self.db.commit()
-    
+
     def _get_latest_model_version(self) -> str | None:
         """Get the latest production model version."""
         model = self.db.query(ModelMetadata).filter(
             ModelMetadata.status == "production"
         ).order_by(ModelMetadata.training_date.desc()).first()
-        
+
         return model.version if model else None
-    
+
     def _evaluate_alerts(
         self,
         batch_id: str,
-        model_version: str,
+        model_version: str | None,
         timestamp: datetime,
         dq_report: Any,
         drift_report: Any,
@@ -301,17 +302,17 @@ class MonitoringPipeline:
         dq_metrics = self.db.query(DataQualityMetrics).filter(
             DataQualityMetrics.batch_id == batch_id
         ).first()
-        
+
         drift_metrics = self.db.query(DriftMetrics).filter(
             DriftMetrics.batch_id == batch_id
         ).all()
-        
+
         model_meta = None
         if model_version:
             model_meta = self.db.query(ModelMetadata).filter(
                 ModelMetadata.version == model_version
             ).first()
-        
+
         # Create alert context
         context = AlertContext(
             batch_id=batch_id,
@@ -321,10 +322,10 @@ class MonitoringPipeline:
             drift_metrics=drift_metrics,
             model_metadata=model_meta,
         )
-        
+
         # Generate alerts
         alerts = self.alert_engine.evaluate(context)
-        
+
         return alerts
 
 

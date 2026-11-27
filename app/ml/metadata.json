@@ -1,7 +1,7 @@
 {
   "name": "baseline_churn_model",
   "version": "v1.0.0",
-  "training_date": "2026-11-25T07:51:52.979299+00:00Z",
+  "training_date": "2026-11-27T10:33:39.959369+00:00Z",
   "dataset_name": "Telco Customer Churn",
   "dataset_version": "v1.0.0",
   "metrics": {

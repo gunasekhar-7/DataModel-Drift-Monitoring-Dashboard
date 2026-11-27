@@ -35,14 +35,14 @@ def test_engineer_features():
     """Test feature engineering produces expected results."""
     df = load_telco_data()
     X, y, feature_info = engineer_features(df)
-    
+
     assert len(X) == len(df)
     assert len(y) == len(df)
     assert 'numeric_features' in feature_info
     assert 'categorical_features' in feature_info
     assert 'target_feature' in feature_info
     assert feature_info['target_feature'] == 'churn'
-    
+
     # Check that y is binary
     assert set(y.unique()) <= {0, 1}
 
@@ -51,9 +51,9 @@ def test_create_preprocessing_pipeline():
     """Test that the preprocessing pipeline can be created."""
     df = load_telco_data()
     X, y, feature_info = engineer_features(df)
-    
+
     numeric_features = feature_info['numeric_features']
     categorical_features = feature_info['categorical_features']
-    
+
     preprocessor = create_preprocessing_pipeline(numeric_features, categorical_features)
     assert preprocessor is not None

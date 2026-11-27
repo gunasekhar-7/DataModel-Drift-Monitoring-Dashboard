@@ -1,8 +1,8 @@
 """Model loading and prediction utilities for the ML module."""
 
-from functools import lru_cache
 import json
 import os
+from functools import lru_cache
 from typing import Any
 
 import joblib

@@ -37,7 +37,7 @@ class NumericalDriftResult:
     p_value: float | None
     threshold: float
     severity: DriftSeverity
-    details: dict[str, Any] = None
+    details: dict[str, Any] | None = None
 
     def __post_init__(self):
         if self.details is None:
@@ -261,12 +261,11 @@ class NumericalDriftDetector:
 
     def _prepare_data(self, data: np.ndarray | pd.Series) -> np.ndarray:
         """Prepare data array by removing NaN and inf values."""
-        if isinstance(data, pd.Series):
-            data = data.values
-        data = np.asarray(data, dtype=float)
-        data = data[~np.isnan(data)]
-        data = data[~np.isinf(data)]
-        return data
+        raw = data.to_numpy() if isinstance(data, pd.Series) else data
+        arr = np.asarray(raw, dtype=float)
+        arr = arr[~np.isnan(arr)]
+        arr = arr[~np.isinf(arr)]
+        return arr
 
     def _ks_test(
         self, ref: np.ndarray, cur: np.ndarray, feature_name: str
@@ -380,9 +379,9 @@ class NumericalDriftDetector:
         expected_pct = np.where(expected_pct == 0, 1e-6, expected_pct)
         actual_pct = np.where(actual_pct == 0, 1e-6, actual_pct)
 
-        psi = np.sum((actual_pct - expected_pct) * np.log(actual_pct / expected_pct))
+        psi = float(np.sum((actual_pct - expected_pct) * np.log(actual_pct / expected_pct)))
 
-        return float(psi)
+        return psi
 
     def _psi_interpretation(self, psi: float) -> str:
         """Interpret PSI value."""

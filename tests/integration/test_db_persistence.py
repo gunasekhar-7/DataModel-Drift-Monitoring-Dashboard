@@ -2,18 +2,11 @@
 
 from sqlalchemy import text
 
-from app.core.database import Base, engine, get_db_session, init_db
+from app.core.database import get_db_session, init_db
 from app.core.security import generate_request_id
 from app.models import (
-    Alert,
-    BatchMetadata,
-    DataQualityMetrics,
-    DriftMetrics,
-    ModelMetadata,
-    PredictionHistory,
     PredictionRequests,
     PredictionResults,
-    RetrainingJob,
 )
 
 

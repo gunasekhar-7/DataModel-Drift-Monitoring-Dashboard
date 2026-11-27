@@ -38,7 +38,7 @@ class PromotionGateResult:
 
 class PromotionGate:
     """Validates candidate models before promotion to production."""
-    
+
     def __init__(
         self,
         db: Session,
@@ -46,10 +46,10 @@ class PromotionGate:
         min_accuracy: float = 0.60,
         min_roc_auc: float = 0.55,
         max_regression: float = 0.02,
-        required_metrics: list[str] = None,
+        required_metrics: list[str] | None = None,
     ):
         """Initialize the promotion gate.
-        
+
         Args:
             db: Database session
             mlflow_manager: MLflow manager
@@ -64,54 +64,54 @@ class PromotionGate:
         self.min_roc_auc = min_roc_auc
         self.max_regression = max_regression
         self.required_metrics = required_metrics or ["accuracy", "precision", "recall", "f1", "roc_auc"]
-    
+
     def validate(
         self,
         candidate_version: str,
         champion_version: str | None = None,
     ) -> PromotionGateResult:
         """Validate a candidate model for promotion.
-        
+
         Args:
             candidate_version: Candidate model version string
             champion_version: Current champion version (auto-detected if None)
-            
+
         Returns:
             PromotionGateResult with validation details
         """
         checks = []
         failed_checks = []
-        
+
         # Check 1: Candidate model exists in MLflow
         check = self._check_candidate_exists(candidate_version)
         checks.append(check)
         if not check.passed:
             failed_checks.append(check.name)
-        
+
         # Check 2: Candidate artifacts are loadable
         check = self._check_artifacts_loadable(candidate_version)
         checks.append(check)
         if not check.passed:
             failed_checks.append(check.name)
-        
+
         # Check 3: Input schema compatibility
         check = self._check_schema_compatibility(candidate_version, champion_version)
         checks.append(check)
         if not check.passed:
             failed_checks.append(check.name)
-        
+
         # Check 4: Preprocessing compatibility
         check = self._check_preprocessing_compatibility(candidate_version, champion_version)
         checks.append(check)
         if not check.passed:
             failed_checks.append(check.name)
-        
+
         # Check 5: Minimum performance requirements
         check = self._check_minimum_performance(candidate_version)
         checks.append(check)
         if not check.passed:
             failed_checks.append(check.name)
-        
+
         # Check 6: Champion vs candidate comparison
         if champion_version:
             check = self._check_champion_comparison(candidate_version, champion_version)
@@ -128,22 +128,22 @@ class PromotionGate:
                 checks.append(check)
                 if not check.passed:
                     failed_checks.append(check.name)
-        
+
         # Check 7: Regression tests (inference compatibility)
         check = self._check_inference_compatibility(candidate_version)
         checks.append(check)
         if not check.passed:
             failed_checks.append(check.name)
-        
+
         # Check 8: Artifact integrity
         check = self._check_artifact_integrity(candidate_version)
         checks.append(check)
         if not check.passed:
             failed_checks.append(check.name)
-        
+
         passed = len(failed_checks) == 0
         reason = "All promotion checks passed" if passed else f"Failed checks: {', '.join(failed_checks)}"
-        
+
         return PromotionGateResult(
             passed=passed,
             candidate_version=candidate_version,
@@ -152,7 +152,7 @@ class PromotionGate:
             failed_checks=failed_checks,
             reason=reason,
         )
-    
+
     def _check_candidate_exists(self, version: str) -> ValidationCheck:
         """Check if candidate model exists in MLflow registry or database."""
         try:
@@ -184,7 +184,7 @@ class PromotionGate:
             message=f"Candidate model version '{version}' not found in MLflow registry or database",
             details={"searched_version": version}
         )
-    
+
     def _check_artifacts_loadable(self, version: str) -> ValidationCheck:
         """Check if candidate model artifacts can be loaded."""
         try:
@@ -196,15 +196,15 @@ class PromotionGate:
                     message="Candidate not found in MLflow",
                     details={}
                 )
-            
+
             # Try loading model
             model = self.mlflow_manager.load_model("baseline_churn_model", "Staging")
-            
+
             # Try loading preprocessor from artifacts
-            run = self.mlflow_manager.client.get_run(
+            self.mlflow_manager.client.get_run(
                 self.mlflow_manager.client.get_model_version("baseline_churn_model", str(mv)).run_id
             )
-            
+
             return ValidationCheck(
                 name="artifacts_loadable",
                 passed=True,
@@ -218,7 +218,7 @@ class PromotionGate:
                 message=f"Failed to load candidate artifacts: {e}",
                 details={"error": str(e)}
             )
-    
+
     def _check_schema_compatibility(
         self,
         candidate_version: str,
@@ -230,7 +230,7 @@ class PromotionGate:
             candidate_meta = self.db.query(ModelMetadata).filter(
                 ModelMetadata.version == candidate_version
             ).first()
-            
+
             if not candidate_meta or not candidate_meta.feature_schema:
                 return ValidationCheck(
                     name="schema_compatibility",
@@ -238,12 +238,12 @@ class PromotionGate:
                     message="Candidate feature schema not found in database",
                     details={}
                 )
-            
+
             candidate_schema = candidate_meta.feature_schema
             if isinstance(candidate_schema, str):
                 import json
                 candidate_schema = json.loads(candidate_schema)
-            
+
             # Get champion schema
             champion_schema = None
             if champion_version:
@@ -255,7 +255,7 @@ class PromotionGate:
                     if isinstance(champion_schema, str):
                         import json
                         champion_schema = json.loads(champion_schema)
-            
+
             if not champion_schema:
                 # No champion to compare against - just validate candidate has required features
                 required = {"numeric_features", "categorical_features", "target_feature"}
@@ -273,24 +273,24 @@ class PromotionGate:
                     message="Candidate schema valid (no champion to compare)",
                     details=candidate_schema
                 )
-            
+
             # Compare schemas
             cand_numeric = set(candidate_schema.get("numeric_features", []))
             champ_numeric = set(champion_schema.get("numeric_features", []))
             cand_categorical = set(candidate_schema.get("categorical_features", []))
             champ_categorical = set(champion_schema.get("categorical_features", []))
-            
+
             missing_numeric = champ_numeric - cand_numeric
             missing_categorical = champ_categorical - cand_categorical
             extra_numeric = cand_numeric - champ_numeric
             extra_categorical = cand_categorical - champ_categorical
-            
+
             issues = []
             if missing_numeric:
                 issues.append(f"Missing numeric features: {missing_numeric}")
             if missing_categorical:
                 issues.append(f"Missing categorical features: {missing_categorical}")
-            
+
             if issues:
                 return ValidationCheck(
                     name="schema_compatibility",
@@ -303,7 +303,7 @@ class PromotionGate:
                         "extra_categorical": list(extra_categorical),
                     }
                 )
-            
+
             return ValidationCheck(
                 name="schema_compatibility",
                 passed=True,
@@ -320,7 +320,7 @@ class PromotionGate:
                 message=f"Error checking schema compatibility: {e}",
                 details={"error": str(e)}
             )
-    
+
     def _check_preprocessing_compatibility(
         self,
         candidate_version: str,
@@ -332,7 +332,7 @@ class PromotionGate:
             candidate_meta = self.db.query(ModelMetadata).filter(
                 ModelMetadata.version == candidate_version
             ).first()
-            
+
             if not candidate_meta or not candidate_meta.preprocessor_path:
                 return ValidationCheck(
                     name="preprocessing_compatibility",
@@ -340,7 +340,7 @@ class PromotionGate:
                     message="Candidate preprocessor path not found",
                     details={}
                 )
-            
+
             # Check if preprocessor file exists and is loadable
             if not os.path.exists(candidate_meta.preprocessor_path):
                 return ValidationCheck(
@@ -349,9 +349,9 @@ class PromotionGate:
                     message=f"Preprocessor file not found: {candidate_meta.preprocessor_path}",
                     details={}
                 )
-            
+
             preprocessor = joblib.load(candidate_meta.preprocessor_path)
-            
+
             # Verify it's a ColumnTransformer
             from sklearn.compose import ColumnTransformer
             if not isinstance(preprocessor, ColumnTransformer):
@@ -361,7 +361,7 @@ class PromotionGate:
                     message=f"Preprocessor is not a ColumnTransformer: {type(preprocessor)}",
                     details={}
                 )
-            
+
             return ValidationCheck(
                 name="preprocessing_compatibility",
                 passed=True,
@@ -375,7 +375,7 @@ class PromotionGate:
                 message=f"Error checking preprocessing compatibility: {e}",
                 details={"error": str(e)}
             )
-    
+
     def _check_minimum_performance(self, version: str) -> ValidationCheck:
         """Check if candidate meets minimum performance thresholds."""
         metrics = None
@@ -429,7 +429,7 @@ class PromotionGate:
             message="All minimum performance thresholds met",
             details={"metrics": metrics},
         )
-    
+
     def _check_champion_comparison(
         self,
         candidate_version: str,
@@ -449,14 +449,14 @@ class PromotionGate:
                     "recall": self.max_regression,
                 }
             )
-            
+
             # Get candidate run ID
             candidate_mv = self.mlflow_manager.get_model_version("baseline_churn_model", candidate_version)
             if candidate_mv:
                 candidate_run_id = self.mlflow_manager.client.get_model_version(
                     "baseline_churn_model", str(candidate_mv)
                 ).run_id
-                
+
                 comparison = self.mlflow_manager.compare_models(
                     candidate_run_id=candidate_run_id,
                     champion_model_name="baseline_churn_model",
@@ -467,7 +467,7 @@ class PromotionGate:
                         "f1": self.max_regression,
                     }
                 )
-            
+
             if not comparison.passed:
                 return ValidationCheck(
                     name="champion_comparison",
@@ -480,7 +480,7 @@ class PromotionGate:
                         "failed_metrics": comparison.failed_metrics,
                     }
                 )
-            
+
             return ValidationCheck(
                 name="champion_comparison",
                 passed=True,
@@ -498,18 +498,18 @@ class PromotionGate:
                 message=f"Error comparing with champion: {e}",
                 details={"error": str(e)}
             )
-    
+
     def _check_inference_compatibility(self, version: str) -> ValidationCheck:
         """Check if candidate model can run inference correctly."""
         try:
             # Load candidate model
             model = self.mlflow_manager.load_model("baseline_churn_model", "Staging")
-            
+
             # Load preprocessor
             candidate_meta = self.db.query(ModelMetadata).filter(
                 ModelMetadata.version == version
             ).first()
-            
+
             if not candidate_meta:
                 return ValidationCheck(
                     name="inference_compatibility",
@@ -517,27 +517,27 @@ class PromotionGate:
                     message="Candidate metadata not found",
                     details={}
                 )
-            
+
             preprocessor = joblib.load(candidate_meta.preprocessor_path)
             feature_schema = candidate_meta.feature_schema
             if isinstance(feature_schema, str):
                 import json
                 feature_schema = json.loads(feature_schema)
-            
+
             # Create sample input
-            sample = {}
+            sample: dict[str, Any] = {}
             for feat in feature_schema.get("numeric_features", []):
                 sample[feat] = 0.0
             for feat in feature_schema.get("categorical_features", []):
                 sample[feat] = "unknown"
-            
+
             # Run inference
             import pandas as pd
             df = pd.DataFrame([sample])
             transformed = preprocessor.transform(df)
             prediction = model.predict(transformed)
             probabilities = model.predict_proba(transformed) if hasattr(model, "predict_proba") else None
-            
+
             # Verify output shape
             if len(prediction) != 1:
                 return ValidationCheck(
@@ -546,7 +546,7 @@ class PromotionGate:
                     message=f"Unexpected prediction shape: {prediction.shape}",
                     details={}
                 )
-            
+
             return ValidationCheck(
                 name="inference_compatibility",
                 passed=True,
@@ -563,14 +563,14 @@ class PromotionGate:
                 message=f"Inference compatibility check failed: {e}",
                 details={"error": str(e)}
             )
-    
+
     def _check_artifact_integrity(self, version: str) -> ValidationCheck:
         """Check artifact integrity (files exist, not corrupted)."""
         try:
             candidate_meta = self.db.query(ModelMetadata).filter(
                 ModelMetadata.version == version
             ).first()
-            
+
             if not candidate_meta:
                 return ValidationCheck(
                     name="artifact_integrity",
@@ -578,17 +578,17 @@ class PromotionGate:
                     message="Candidate metadata not found",
                     details={}
                 )
-            
+
             issues = []
             artifacts = {
                 "model": candidate_meta.artifact_path,
                 "preprocessor": candidate_meta.preprocessor_path,
             }
-            
+
             # Check feature schema file
             if candidate_meta.feature_schema_path:
                 artifacts["feature_schema"] = candidate_meta.feature_schema_path
-            
+
             for name, path in artifacts.items():
                 if not path:
                     issues.append(f"{name}: path not recorded")
@@ -599,7 +599,7 @@ class PromotionGate:
                 # Check file size > 0
                 if os.path.getsize(path) == 0:
                     issues.append(f"{name}: file is empty")
-            
+
             if issues:
                 return ValidationCheck(
                     name="artifact_integrity",
@@ -607,7 +607,7 @@ class PromotionGate:
                     message=f"Artifact integrity issues: {'; '.join(issues)}",
                     details={"issues": issues}
                 )
-            
+
             return ValidationCheck(
                 name="artifact_integrity",
                 passed=True,

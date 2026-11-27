@@ -1,7 +1,7 @@
 """Integration tests for core API endpoints."""
 
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
 from app import get_app
 from app.core.database import init_db

@@ -4,17 +4,14 @@ Provides interactive visualizations for model health, data quality,
 feature drift, prediction monitoring, and model performance tracking.
 """
 
-from datetime import datetime, timezone
-import json
 import os
 import sys
+from datetime import datetime, timezone
 
-import numpy as np
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
-from sqlalchemy import desc, func
 import streamlit as st
+from sqlalchemy import desc, func
 
 # Add workspace root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -27,7 +24,6 @@ from app.models import (
     DataQualityMetrics,
     DriftMetrics,
     ModelMetadata,
-    PredictionHistory,
     PredictionRequests,
     PredictionResults,
     RetrainingJob,

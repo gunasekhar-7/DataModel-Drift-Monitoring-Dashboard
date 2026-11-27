@@ -1,10 +1,9 @@
 """API routers for the Data & Model Drift Monitoring Platform."""
 
-from datetime import datetime, timezone
 import json
 import logging
 import time
-from typing import Any
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -45,8 +44,6 @@ health_router = APIRouter(prefix="/api/v1", tags=["health"])
 @health_router.get("/health", response_model=HealthCheckResponse)
 async def health_check(request: Request) -> HealthCheckResponse:
     """Liveness and readiness health check endpoint."""
-    request_id = get_request_id_from_request(request) or generate_request_id()
-
     return HealthCheckResponse(
         status="healthy",
         timestamp=datetime.now(timezone.utc).isoformat(),

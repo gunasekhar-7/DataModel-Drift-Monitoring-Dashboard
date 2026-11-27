@@ -88,7 +88,7 @@ def setup_scenarios(scenarios: dict[str, Any], seed: int = 42) -> None:
         UnexpectedCategoricalValues,
         UnitConversionError,
     )
-    
+
     scenario_class_map = {
         "sudden_numerical_shift": SuddenNumericalShift,
         "gradual_numerical_shift": GradualNumericalShift,
@@ -101,7 +101,7 @@ def setup_scenarios(scenarios: dict[str, Any], seed: int = 42) -> None:
         "seasonal_shift": SeasonalShift,
         "concept_drift": ConceptDrift,
     }
-    
+
     for name, config in scenarios.items():
         scenario_type = config.get("scenario_type", "custom")
         scenario_class = scenario_class_map.get(scenario_type, ScenarioConfig)

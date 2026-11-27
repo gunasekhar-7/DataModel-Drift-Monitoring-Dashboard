@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
 # Install Python dependencies
 COPY pyproject.toml .
 RUN pip install --no-cache-dir poetry
-RUN poetry config virtualenvs.create false && poetry install --no-interaction --no-ansi
+RUN poetry config virtualenvs.create false && poetry install --no-interaction --no-ansi --no-root --only main
 
 # Copy application code and assets
 COPY app ./app

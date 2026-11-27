@@ -1,6 +1,7 @@
 """Unit tests for the Promotion Gate."""
 
 import uuid
+
 import pytest
 
 from app.core.database import get_db_session, init_db

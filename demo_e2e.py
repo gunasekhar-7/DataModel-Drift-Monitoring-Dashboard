@@ -15,10 +15,6 @@ This script demonstrates the complete production MLOps workflow:
 import json
 import os
 import sys
-import time
-
-import numpy as np
-import pandas as pd
 
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
@@ -28,10 +24,8 @@ from app.core.security import generate_request_id
 from app.ml.model import load_model_artifacts, make_prediction, preprocess_features
 from app.models import (
     Alert,
-    BatchMetadata,
     DataQualityMetrics,
     DriftMetrics,
-    ModelMetadata,
     PredictionHistory,
     PredictionRequests,
     PredictionResults,
@@ -276,7 +270,7 @@ def main():
     print_step(11, "Run 8 Standard Promotion Gate Safeguards")
     db = SessionLocal()
     try:
-        gate = PromotionGate(db=db)
+        PromotionGate(db=db)
         checks = [
             ("1. candidate_exists", True),
             ("2. artifacts_loadable", True),

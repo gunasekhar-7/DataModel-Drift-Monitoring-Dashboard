@@ -257,7 +257,6 @@ def train_and_evaluate(
 
     # Training results
     results = {
-        "model": full_pipeline,
         "preprocessor": full_pipeline.named_steps["preprocessor"],
         "model": full_pipeline.named_steps["classifier"],
         "metrics": {

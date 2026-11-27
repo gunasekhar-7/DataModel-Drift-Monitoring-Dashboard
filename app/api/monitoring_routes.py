@@ -4,12 +4,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import desc
+from sqlalchemy import Integer, desc
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import generate_request_id, get_request_id_from_request
 from app.models import (
     Alert,
     BatchMetadata,
@@ -28,7 +27,6 @@ monitoring_router = APIRouter(prefix="/api/v1/monitoring", tags=["monitoring"])
 @monitoring_router.get("/health", response_model=HealthCheckResponse)
 async def monitoring_health_check(request: Request) -> HealthCheckResponse:
     """Monitoring service health check."""
-    request_id = get_request_id_from_request(request) or generate_request_id()
     return HealthCheckResponse(
         status="healthy",
         timestamp=datetime.now(timezone.utc).isoformat(),
@@ -241,8 +239,8 @@ async def get_drift_summary(
                 "drift_detected": 0,
                 "warnings": 0,
                 "no_drift": 0,
-                "latest_severity": "no_drift",  # type: ignore[assignment]
-                "latest_timestamp": None,  # type: ignore
+                "latest_severity": "no_drift",
+                "latest_timestamp": None,
             }
         fs = feature_summary[m.feature_name]
         fs["total_tests"] += 1
@@ -332,10 +330,10 @@ async def get_prediction_distribution(
             hourly_counts[hour_key]["avg_probability"] /= hourly_counts[hour_key]["total"]
 
     # Overall distribution from aggregated data
-    total = sum(h["total"] for h in hourly_counts.values())
-    class_0 = sum(h["class_0"] for h in hourly_counts.values())
-    class_1 = sum(h["class_1"] for h in hourly_counts.values())
-    avg_prob = sum(h["avg_probability"] * h["total"] for h in hourly_counts.values()) / total if total > 0 else 0.0
+    total = sum(int(h["total"]) for h in hourly_counts.values())
+    class_0 = sum(int(h["class_0"]) for h in hourly_counts.values())
+    class_1 = sum(int(h["class_1"]) for h in hourly_counts.values())
+    avg_prob = sum(float(h["avg_probability"]) * int(h["total"]) for h in hourly_counts.values()) / total if total > 0 else 0.0
 
     return {
         "period_hours": hours,

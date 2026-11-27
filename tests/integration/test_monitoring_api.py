@@ -1,11 +1,11 @@
 """Integration tests for monitoring API endpoints."""
 
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
 from app import get_app
 from app.core.database import get_db_session, init_db
-from app.models import Alert, ModelMetadata
+from app.models import ModelMetadata
 
 
 @pytest.fixture(scope="module")

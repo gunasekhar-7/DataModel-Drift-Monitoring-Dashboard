@@ -537,24 +537,27 @@ def create_engine_from_reference(
     Returns:
         Configured DataQualityEngine instance
     """
-    schema = {col: str(dtype) for col, dtype in reference_df.dtypes.items()}
+    schema: dict[str, Any] = {
+        str(col): str(dtype) for col, dtype in reference_df.dtypes.items()
+    }
 
-    stats = {}
+    stats: dict[str, dict[str, float]] = {}
     for col in reference_df.select_dtypes(include=[np.number]).columns:
         col_data = reference_df[col].dropna()
         if len(col_data) > 0:
-            stats[col] = {
+            stats[str(col)] = {
                 "min": float(col_data.min()),
                 "max": float(col_data.max()),
                 "mean": float(col_data.mean()),
                 "std": float(col_data.std()),
             }
 
-    domains = categorical_domains or {}
+    domains: dict[str, list[Any]] = categorical_domains or {}
     for col in reference_df.select_dtypes(include=["object", "category"]).columns:
-        if col not in domains:
+        col_key = str(col)
+        if col_key not in domains:
             unique_vals = reference_df[col].dropna().unique()
-            domains[col] = sorted([str(v) for v in unique_vals])
+            domains[col_key] = sorted([str(v) for v in unique_vals])
 
     numeric_ranges = {
         col: (stats[col]["min"], stats[col]["max"]) for col in stats

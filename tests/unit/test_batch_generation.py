@@ -23,21 +23,21 @@ def test_scenario_types():
     """Test that all scenario types are registered."""
     from data.simulator.scenarios import SCENARIO_REGISTRY
     from scripts.generate_batches import load_scenarios_yaml
-    
+
     # Need to register scenarios first
     scenarios = load_scenarios_yaml()
     setup_scenarios(scenarios, seed=42)
-    
+
     assert len(SCENARIO_REGISTRY) == 10, f"Expected 10 registered scenarios, got {len(SCENARIO_REGISTRY)}"
 
 
 def test_scenario_reproducibility():
     """Test that batches generated with the same seed are reproducible."""
-    
+
     reference_df = load_reference_data(
         filepath='data/raw/Telco-Customer-Churn.csv'
     )
-    
+
     # Generate two batches with the same scenario and seed
     batch1 = generate_scenario_batch(
         scenario_name='sudden_numerical_shift',
@@ -51,7 +51,7 @@ def test_scenario_reproducibility():
         seed=42,
         reference_df=reference_df
     )
-    
+
     # Both should have the same batch_id and row_count
     assert batch1['batch_id'] == batch2['batch_id'], "Batch IDs should match with same seed"
     assert batch1['row_count'] == batch2['row_count'], "Row counts should match with same seed"
@@ -60,16 +60,16 @@ def test_scenario_reproducibility():
 def test_batch_generation():
     """Test that batches can be generated for all scenarios."""
     from scripts.generate_batches import load_scenarios_yaml
-    
+
     reference_df = load_reference_data(
         filepath='data/raw/Telco-Customer-Churn.csv'
     )
     scenarios = load_scenarios_yaml()
     setup_scenarios(scenarios, seed=42)
-    
+
     # Generate batches for all scenarios
     results = generate_all_scenarios(batch_size=50, reference_df=reference_df)
-    
+
     # All scenarios should complete without error
     for scenario_name, result in results.items():
         assert 'error' not in result, f"Scenario {scenario_name} failed: {result['error']}"

@@ -6,10 +6,11 @@ import logging
 import os
 import smtplib
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from typing import Any
 
 import requests
 
@@ -28,19 +29,15 @@ class NotificationConfig:
     email_username: str | None = None
     email_password: str | None = None
     email_from: str | None = None
-    email_to: list[str] = None
+    email_to: list[str] = field(default_factory=list)
     email_use_tls: bool = True
-    
-    def __post_init__(self):
-        if self.email_to is None:
-            self.email_to = []
-    
+
     @classmethod
     def from_env(cls) -> NotificationConfig:
         """Create config from environment variables."""
         email_to_str = os.getenv("ALERT_EMAIL_TO", "")
         email_to = [e.strip() for e in email_to_str.split(",") if e.strip()]
-        
+
         return cls(
             slack_webhook_url=os.getenv("SLACK_WEBHOOK_URL"),
             slack_channel=os.getenv("SLACK_CHANNEL"),
@@ -56,15 +53,15 @@ class NotificationConfig:
 
 class NotificationChannel(ABC):
     """Abstract base class for notification channels."""
-    
+
     @abstractmethod
     def send(self, alert: Alert, config: NotificationConfig) -> bool:
         """Send notification for an alert.
-        
+
         Returns:
             True if successful, False otherwise
         """
-    
+
     @abstractmethod
     def is_configured(self, config: NotificationConfig) -> bool:
         """Check if channel is properly configured."""
@@ -72,23 +69,67 @@ class NotificationChannel(ABC):
 
 class SlackNotificationChannel(NotificationChannel):
     """Slack webhook notification channel."""
-    
+
     def is_configured(self, config: NotificationConfig) -> bool:
         return bool(config.slack_webhook_url)
-    
+
     def send(self, alert: Alert, config: NotificationConfig) -> bool:
-        if not self.is_configured(config):
+        if not config.slack_webhook_url:
             return False
-        
+
         # Determine color based on severity
         color_map = {
             "warning": "#FFA500",  # Orange
             "critical": "#FF0000",  # Red
         }
         color = color_map.get(alert.severity, "#808080")
-        
+
+        fields: list[dict[str, Any]] = [
+            {
+                "title": "Alert ID",
+                "value": alert.alert_id,
+                "short": True,
+            },
+            {
+                "title": "Model Version",
+                "value": alert.model_version or "N/A",
+                "short": True,
+            },
+            {
+                "title": "Batch ID",
+                "value": alert.batch_id or "N/A",
+                "short": True,
+            },
+            {
+                "title": "Feature",
+                "value": alert.feature_name or "N/A (aggregate)",
+                "short": True,
+            },
+            {
+                "title": "Detection Method",
+                "value": alert.detection_method or "N/A",
+                "short": True,
+            },
+            {
+                "title": "Measured Value",
+                "value": f"{alert.measured_value:.4f}" if alert.measured_value is not None else "N/A",
+                "short": True,
+            },
+            {
+                "title": "Threshold",
+                "value": f"{alert.threshold_value:.4f}" if alert.threshold_value is not None else "N/A",
+                "short": True,
+            },
+        ]
+        if alert.recommended_action:
+            fields.append({
+                "title": "Recommended Action",
+                "value": alert.recommended_action,
+                "short": False,
+            })
+
         # Build Slack message
-        payload = {
+        payload: dict[str, Any] = {
             "channel": config.slack_channel,
             "username": "Drift Monitor",
             "icon_emoji": ":warning:" if alert.severity == "critical" else ":large_yellow_circle:",
@@ -96,58 +137,14 @@ class SlackNotificationChannel(NotificationChannel):
                 {
                     "color": color,
                     "title": f"[{alert.severity.upper()}] {alert.message}",
-                    "fields": [
-                        {
-                            "title": "Alert ID",
-                            "value": alert.alert_id,
-                            "short": True,
-                        },
-                        {
-                            "title": "Model Version",
-                            "value": alert.model_version or "N/A",
-                            "short": True,
-                        },
-                        {
-                            "title": "Batch ID",
-                            "value": alert.batch_id or "N/A",
-                            "short": True,
-                        },
-                        {
-                            "title": "Feature",
-                            "value": alert.feature_name or "N/A (aggregate)",
-                            "short": True,
-                        },
-                        {
-                            "title": "Detection Method",
-                            "value": alert.detection_method or "N/A",
-                            "short": True,
-                        },
-                        {
-                            "title": "Measured Value",
-                            "value": f"{alert.measured_value:.4f}" if alert.measured_value is not None else "N/A",
-                            "short": True,
-                        },
-                        {
-                            "title": "Threshold",
-                            "value": f"{alert.threshold_value:.4f}" if alert.threshold_value is not None else "N/A",
-                            "short": True,
-                        },
-                    ],
+                    "fields": fields,
                     "text": alert.explanation or "No explanation provided",
                     "footer": "Data & Model Drift Monitoring Platform",
                     "ts": int(alert.timestamp.timestamp()) if alert.timestamp else int(datetime.now(timezone.utc).timestamp()),
                 }
             ],
         }
-        
-        # Add recommended action if present
-        if alert.recommended_action:
-            payload["attachments"][0]["fields"].append({
-                "title": "Recommended Action",
-                "value": alert.recommended_action,
-                "short": False,
-            })
-        
+
         try:
             response = requests.post(
                 config.slack_webhook_url,
@@ -164,7 +161,7 @@ class SlackNotificationChannel(NotificationChannel):
 
 class EmailNotificationChannel(NotificationChannel):
     """Email notification channel."""
-    
+
     def is_configured(self, config: NotificationConfig) -> bool:
         return all([
             config.email_smtp_host,
@@ -173,14 +170,20 @@ class EmailNotificationChannel(NotificationChannel):
             config.email_from,
             config.email_to,
         ])
-    
+
     def send(self, alert: Alert, config: NotificationConfig) -> bool:
-        if not self.is_configured(config):
+        if (
+            not config.email_smtp_host
+            or not config.email_username
+            or not config.email_password
+            or not config.email_from
+            or not config.email_to
+        ):
             return False
-        
+
         severity_label = alert.severity.upper()
         subject = f"[{severity_label}] Drift Monitor Alert: {alert.message}"
-        
+
         # Build HTML email
         html_body = f"""
         <html>
@@ -189,9 +192,9 @@ class EmailNotificationChannel(NotificationChannel):
                 <h2 style="color: {'#FF0000' if alert.severity == 'critical' else '#FFA500'};">
                     [{severity_label}] Drift Monitoring Alert
                 </h2>
-                
+
                 <p><strong>Message:</strong> {alert.message}</p>
-                
+
                 <table style="border-collapse: collapse; width: 100%; margin: 20px 0;">
                     <tr>
                         <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold; width: 30%;">Alert ID</td>
@@ -230,11 +233,11 @@ class EmailNotificationChannel(NotificationChannel):
                         <td style="border: 1px solid #ddd; padding: 8px;">{alert.timestamp.isoformat() if alert.timestamp else 'N/A'}</td>
                     </tr>
                 </table>
-                
+
                 {f'<p><strong>Explanation:</strong> {alert.explanation}</p>' if alert.explanation else ''}
-                
+
                 {f'<p><strong>Recommended Action:</strong> <span style="background-color: #fff3cd; padding: 10px; display: inline-block;">{alert.recommended_action}</span></p>' if alert.recommended_action else ''}
-                
+
                 <hr style="margin: 20px 0;">
                 <p style="font-size: 12px; color: #666;">
                     This alert was generated by the Data & Model Drift Monitoring Platform.
@@ -244,7 +247,7 @@ class EmailNotificationChannel(NotificationChannel):
         </body>
         </html>
         """
-        
+
         # Also create plain text version
         text_body = f"""
 [{severity_label}] Drift Monitoring Alert
@@ -268,22 +271,22 @@ Timestamp: {alert.timestamp.isoformat() if alert.timestamp else 'N/A'}
 This alert was generated by the Data & Model Drift Monitoring Platform.
 Alert ID: {alert.alert_id}
         """
-        
+
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
         msg["From"] = config.email_from
         msg["To"] = ", ".join(config.email_to)
-        
+
         msg.attach(MIMEText(text_body, "plain"))
         msg.attach(MIMEText(html_body, "html"))
-        
+
         try:
             with smtplib.SMTP(config.email_smtp_host, config.email_smtp_port) as server:
                 if config.email_use_tls:
                     server.starttls()
                 server.login(config.email_username, config.email_password)
                 server.send_message(msg)
-            
+
             logger.info(f"Email notification sent for alert {alert.alert_id}")
             return True
         except Exception as e:
@@ -293,14 +296,14 @@ Alert ID: {alert.alert_id}
 
 class NotificationService:
     """Service for managing and sending notifications across multiple channels."""
-    
+
     def __init__(
         self,
         config: NotificationConfig | None = None,
         channels: list[NotificationChannel] | None = None,
     ):
         """Initialize the notification service.
-        
+
         Args:
             config: Notification configuration (loads from env if None)
             channels: Custom notification channels (uses defaults if None)
@@ -310,20 +313,20 @@ class NotificationService:
             SlackNotificationChannel(),
             EmailNotificationChannel(),
         ]
-        
+
         # Log configuration status
         for channel in self.channels:
             if channel.is_configured(self.config):
                 logger.info(f"Notification channel configured: {channel.__class__.__name__}")
             else:
                 logger.debug(f"Notification channel not configured: {channel.__class__.__name__}")
-    
+
     def send_alert(self, alert: Alert) -> dict[str, bool]:
         """Send alert notification through all configured channels.
-        
+
         Args:
             alert: Alert to notify about
-            
+
         Returns:
             Dictionary mapping channel names to success status
         """
@@ -338,15 +341,15 @@ class NotificationService:
                     results[channel.__class__.__name__] = False
             else:
                 results[channel.__class__.__name__] = False
-        
+
         return results
-    
+
     def send_alerts(self, alerts: list[Alert]) -> dict[str, dict[str, bool]]:
         """Send multiple alerts.
-        
+
         Args:
             alerts: List of alerts to notify about
-            
+
         Returns:
             Dictionary mapping alert IDs to channel results
         """
@@ -354,15 +357,15 @@ class NotificationService:
         for alert in alerts:
             results[alert.alert_id] = self.send_alert(alert)
         return results
-    
+
     def test_channels(self) -> dict[str, bool]:
         """Test all configured channels with a test message.
-        
+
         Returns:
             Dictionary mapping channel names to test success status
         """
         from app.models import Alert
-        
+
         test_alert = Alert(
             alert_id="test-alert-001",
             batch_id="test-batch",
@@ -379,7 +382,7 @@ class NotificationService:
             recommended_action="No action required",
             status="active",
         )
-        
+
         return self.send_alert(test_alert)
 
 
